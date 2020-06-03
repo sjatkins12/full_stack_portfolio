@@ -1,0 +1,65 @@
+version: "3.4"
+
+services:
+  flask:
+    build:
+      context: ./api/
+      dockerfile: ./docker/Dockerfile
+    user: root
+    command: "bash -c 'while true; do python /usr/src/app/api/server.py; sleep 2; done'"
+    depends_on:
+      - rabbitmq
+      - redis
+    ports:
+        - 5000:5000
+    environment:
+        - FLASK_APP=/usr/src/app/api/server.py
+    volumes:
+      - ./api:/usr/src/app/api
+    networks:
+      core_default:
+        ipv4_address: 172.18.0.2
+
+  worker-api:
+    build:
+      context: ./api/
+      dockerfile: ./docker/Dockerfile
+    user: root
+    command: "celery -A api.tasks worker -l info"
+    environment:
+        - REDIS_URL=http://redis:6379
+        - RABBITMQ_URL=http://rabbitmq:5672
+    depends_on:
+      - rabbitmq
+      - redis
+    volumes:
+      - ./api:/usr/src/app/api
+    networks:
+      core_default:
+        ipv4_address: 172.18.0.3
+
+  rabbitmq:
+    image: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - 5672:5672
+    networks:
+      core_default:
+        ipv4_address: 172.18.0.4
+  
+  redis:
+    image: redis:4.0.10
+    hostname: redis
+    networks:
+      core_default:
+        ipv4_address: 172.18.0.9
+    ports:
+      - 6379:6379
+
+networks:
+  core_default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.18.0.0/16
